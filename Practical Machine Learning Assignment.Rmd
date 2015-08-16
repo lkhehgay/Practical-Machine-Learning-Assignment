@@ -1,0 +1,103 @@
+---
+title: "Practical Machine Learning Assignment"
+author: "LKG"
+date: "Saturday, August 15, 2015"
+output: html_document
+---
+
+**Executive Summary**
+
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+
+**Step 1: Reading Data and Data cleaning**
+
+
+Two data set were available. 
+
+A training set, and a test set for which 20 individuals without any classification for the class of exercise was available. Data are cleaned by excluding NA information from all the variables, resulting in the creation of training and testing data sets.
+
+```{r}
+library(caret)
+setwd("C://LKG//MOOC//Practical Machine Learning//Assignment")
+
+##To load the data
+pmlTrain <- read.csv("pml-training.csv", header = T, na.strings = c("NA", "#DIV/0!"))
+pmlTest <- read.csv("pml-testing.csv", header = T, na.string = c("NA", "#DIV/0!"))
+
+##To exclude NA from all variables
+noNApmlTrain <- pmlTrain[, apply(pmlTrain, 2, function(x) !any(is.na(x)))] 
+dim(noNApmlTrain)
+
+##To exclude user information and time from all variables
+cleanpmlTrain <- noNApmlTrain[, -c(1:8)]
+dim(cleanpmlTrain)
+
+##To create test data set for 20 test cases
+cleanpmltest <- pmlTest[, names(cleanpmlTrain[, -52])]
+dim(cleanpmltest)
+```
+
+
+**Step 2: Data Partition**
+
+
+A cleaned data set is obtained. Partitioning was performed to obtain a 75% training set and 25% test set.
+```{r}
+inTrain <- createDataPartition(y = cleanpmlTrain$classe, p = 0.75, list = F)
+training <- cleanpmlTrain[inTrain, ]
+testing <- cleanpmlTrain[-inTrain, ] 
+
+#Training and test set dimensions
+dim(training)
+```
+
+
+**Step 3: Training A Random Forest Model**
+
+
+To create a Random Forest Model on the Training data set, and to check on the accuracy of this model against the Test data set. The trained model is 99.4% accurate against the test set. However, when runned under a different boosting algorithm (GBM), the predications for the trained and test data set are similarly close although it is lower than the Random Forest Model.
+```{r}
+ctrl <- trainControl(method = "cv", allowParallel = T, number = 5, verbose = T)
+model <- train(classe ~ ., data = training, model = "rf", trControl = ctrl)
+pred <- predict(model, newdata = testing)
+
+##Check the predictions against the held-back test-set
+sum(pred == testing$classe) / length(pred)
+
+confusionMatrix(testing$classe, pred)$table
+##The trained model is 99.4% accurate against the test set.
+
+pred20 <- predict(model, newdata = cleanpmltest)
+
+# Output for the prediction of the 20 cases provided
+pred20
+
+##The prediction for 20 test cases was very similar against the model.
+
+ctrl1 <- trainControl(method = "cv", allowParallel = T, number = 5, verbose = T)
+model1 <- train(classe~., data = training, method = "gbm", trControl = ctrl1)
+model1$finalModel
+
+class(model1)
+
+predgmb <- predict(model1, newdata = testing)
+confusionMatrix(predgmb, testing$classe)
+
+predtrain <- predict(model1, newdata = training)
+confusionMatrix(predtrain, training$classe)
+
+##To generate the 20 text files for submission
+getwd()
+pml_write_files = function(x)
+{
+  n = length(x)
+  for(i in 1:n)
+  {
+    filename = paste0("problem_id_", i, ".txt")
+    write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, col.names = FALSE)
+  }
+}
+pml_write_files(pred20)
+```
